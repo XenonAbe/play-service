@@ -33,12 +33,14 @@
             // 
             // serviceProcessInstaller
             // 
+            this.serviceProcessInstaller.Account = System.ServiceProcess.ServiceAccount.LocalSystem;
             this.serviceProcessInstaller.Password = null;
             this.serviceProcessInstaller.Username = null;
             // 
             // serviceInstaller
             // 
-            this.serviceInstaller.ServiceName = "PlayService";
+            this.serviceInstaller.Description = "Play Framework";
+            this.serviceInstaller.ServiceName = "Play";
             this.serviceInstaller.StartType = System.ServiceProcess.ServiceStartMode.Automatic;
             // 
             // ProjectInstaller
@@ -46,6 +48,8 @@
             this.Installers.AddRange(new System.Configuration.Install.Installer[] {
             this.serviceProcessInstaller,
             this.serviceInstaller});
+            this.BeforeInstall += new System.Configuration.Install.InstallEventHandler(this.ProjectInstaller_BeforeInstall);
+            this.BeforeUninstall += new System.Configuration.Install.InstallEventHandler(this.ProjectInstaller_BeforeUninstall);
 
         }
 

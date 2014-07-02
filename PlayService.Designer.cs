@@ -32,7 +32,7 @@
             // PlayService
             // 
             this.CanShutdown = true;
-            this.ServiceName = "PlayService";
+            this.ServiceName = "Play";
 
         }
 
