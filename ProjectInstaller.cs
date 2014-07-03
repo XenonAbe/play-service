@@ -30,12 +30,14 @@ namespace PlayService
                 serviceInstaller.ServiceName = Context.Parameters["ServiceName"];
 
             var assemblyPath = Context.Parameters["assemblypath"];
+            if (!String.IsNullOrEmpty(Context.Parameters["ServiceName"]))
+                assemblyPath += " /ServiceName=" + Context.Parameters["ServiceName"].QuoteAsNeeded();
             if (!String.IsNullOrEmpty(Context.Parameters["AppName"]))
                 assemblyPath += " /AppName=" + Context.Parameters["AppName"].QuoteAsNeeded();
-            if (!String.IsNullOrEmpty(Context.Parameters["StagePath"]))
-                assemblyPath += " /StagePath=" + Context.Parameters["StagePath"].QuoteAsNeeded();
+            if (!String.IsNullOrEmpty(Context.Parameters["AppHome"]))
+                assemblyPath += " /AppHome=" + Context.Parameters["AppHome"].QuoteAsNeeded();
             if (!String.IsNullOrEmpty(Context.Parameters["Env"]))
-                assemblyPath += " /Env=" + Context.Parameters["Env"].QuoteAsNeeded();
+                assemblyPath += " /Env=" + Context.Parameters["Env"].Quote();
             Context.Parameters["assemblypath"] = assemblyPath;
         }
 

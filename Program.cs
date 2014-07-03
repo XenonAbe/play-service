@@ -1,4 +1,5 @@
-﻿using NDesk.Options;
+﻿using System.Reflection;
+using NDesk.Options;
 using PlayService.Extensions;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,9 @@ namespace PlayService
     {
         public static readonly ParamType Param = new ParamType();
 
+        [DllImport("kernel32.dll")]
+        private static extern bool FreeConsole();
+
         public class ParamType
         {
             public bool Install { get; set; }
@@ -23,7 +27,7 @@ namespace PlayService
             public String ServiceName { get; set; }
 
             public String AppName { get; set; }
-            public String StagePath { get; set; }
+            public String AppHome { get; set; }
             public String Env { get; set; }
 
             public String LogFile { get; set; }
@@ -46,9 +50,9 @@ namespace PlayService
 
           { "ServiceName=",  v => Param.ServiceName = v },
 
-          { "AppName=",  v => Param.AppName = v },
-          { "StagePath=",  v => Param.StagePath = v },
-          { "Env=",  v => Param.Env = v },
+          { "AppName|ApplicationName=",  v => Param.AppName = v },
+          { "AppHome|ApplicationHome=",  v => Param.AppHome = v },
+          { "Env|Environment|EnvironmentVariables=",  v => Param.Env = v },
 
           { "LogFile=",       v => Param.LogFile = v },
           { "LogToConsole=",  v => Param.LogToConsole = v },
@@ -65,7 +69,7 @@ namespace PlayService
         {
             try {
                 ParseArgs();
-            } catch (Exception ex) {
+            } catch (ApplicationException ex) {
                 Console.Error.WriteLine(ex.Message);
                 Usage();
                 return;
@@ -81,7 +85,7 @@ namespace PlayService
                 return;
             }
 
-            if (!Param.Uninstall && (String.IsNullOrEmpty(Param.AppName) || String.IsNullOrEmpty(Param.StagePath))) {
+            if (!Param.Uninstall && (String.IsNullOrEmpty(Param.AppName) || String.IsNullOrEmpty(Param.AppHome))) {
                 Usage();
                 return;
             }
@@ -97,6 +101,8 @@ namespace PlayService
                 return;
             }
 
+            FreeConsole();
+
             var servicesToRun = new ServiceBase[] 
             { 
                 new PlayService() 
@@ -106,10 +112,18 @@ namespace PlayService
 
         private static void InstallOrUninstall()
         {
+            if (Param.Install) {
+                // パラメーターチェック
+                if (!Directory.Exists(Param.AppHome)) {
+                    throw new ApplicationException(String.Format("Directory not exists {0}", Param.AppHome));
+                }
+                Param.AppHome = Path.GetFullPath(Param.AppHome);
+            }
+
             //installutil.exeのフルパスを取得
             string installutilPath = Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "installutil.exe");
             if (!File.Exists(installutilPath)) {
-                throw new Exception("installutil.exeが見つかりませんでした。");
+                throw new ApplicationException("installutil.exeが見つかりませんでした。");
             }
 
             var installutilArgs = new List<string>();
@@ -132,13 +146,14 @@ namespace PlayService
             // アセンブリのオプション
             if (Param.AppName != null)
                 installutilArgs.Add("/AppName=" + Param.AppName.QuoteAsNeeded());
-            if (Param.StagePath != null)
-                installutilArgs.Add("/StagePath=" + Param.StagePath.QuoteAsNeeded());
+            if (Param.AppHome != null)
+                installutilArgs.Add("/AppHome=" + Param.AppHome.QuoteAsNeeded());
             if (Param.Env != null)
-                installutilArgs.Add("/Env=" + Param.Env.QuoteAsNeeded());
+                installutilArgs.Add("/Env=" + Param.Env.Quote());
 
             // アセンブリ
-            installutilArgs.Add(Path.GetFullPath(Environment.GetCommandLineArgs()[0]).QuoteAsNeeded());
+            Assembly assembly = Assembly.GetEntryAssembly();
+            installutilArgs.Add(assembly.Location.QuoteAsNeeded());
 
             var installutilArg = String.Join(" ", installutilArgs);
 
@@ -171,7 +186,7 @@ namespace PlayService
 
             var extra = OptionSet.Parse(args);
             if (extra.Count > 0)
-                throw new Exception(String.Format("Invalid Argument: {0}", extra[0]));
+                throw new ApplicationException(String.Format("Invalid Argument: {0}", extra[0]));
         }
 
         static void Usage()

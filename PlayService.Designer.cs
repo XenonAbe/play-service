@@ -31,7 +31,6 @@
             // 
             // PlayService
             // 
-            this.CanShutdown = true;
             this.ServiceName = "Play";
 
         }
