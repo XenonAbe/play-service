@@ -40,7 +40,7 @@
             // serviceInstaller
             // 
             this.serviceInstaller.Description = "Play Framework";
-            this.serviceInstaller.ServiceName = "Play";
+            this.serviceInstaller.ServiceName = "PlayService";
             this.serviceInstaller.StartType = System.ServiceProcess.ServiceStartMode.Automatic;
             // 
             // ProjectInstaller

@@ -31,7 +31,7 @@
             // 
             // PlayService
             // 
-            this.ServiceName = "Play";
+            this.ServiceName = "PlayService";
 
         }
 
