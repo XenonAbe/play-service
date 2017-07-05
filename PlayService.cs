@@ -73,7 +73,7 @@ namespace PlayService
                 throw new ApplicationException(String.Format("not found {0}", startBatch));
 
             if (Program.Param.Env != null) {
-                var envs = Program.Param.Env.Split(new[] {';'});
+                var envs = Program.Param.Env.Split(new[] {','});
                 foreach (var env in envs) {
                     var keyValue = env.Split(new[] {'='}, 2);
                     if (psi.EnvironmentVariables.ContainsKey(keyValue[0])) {
