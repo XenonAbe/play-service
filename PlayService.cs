@@ -99,7 +99,7 @@ namespace PlayService
                         SafeWaitHandle = new SafeWaitHandle(process.Handle, false)
                     };
                     var index = WaitHandle.WaitAny(new WaitHandle[] {_waitFileHandle, waitProcessHandle}, StartTimeout - 5000);
-                    if (index == WaitHandle.WaitTimeout) 
+                    if (index == WaitHandle.WaitTimeout)
                         throw new ApplicationException("Timeout");
 
                     if (index == 1) {
@@ -111,15 +111,25 @@ namespace PlayService
                         throw new ApplicationException("Pidfile is not created");
                     }
                     watcher.EnableRaisingEvents = false;
-    
+
                     //Thread.Sleep(500);
 
                     _parentProcessId = process.Id;
 
-                    using (var reader = new StreamReader(pidfilePath)) {
-                        var line = reader.ReadLine();
-                        Debug.Assert(line != null, "line != null");
-                        _processId = Int32.Parse(line);
+                    for (int i = 0; i < 10; i++) {
+                        Thread.Sleep(100);
+
+                        try {
+                            using (var reader = new StreamReader(pidfilePath)) {
+                                var line = reader.ReadLine();
+                                Debug.Assert(line != null, "line != null");
+                                _processId = Int32.Parse(line);
+                            }
+                        } catch (IOException) {
+                            // タイミングによりpidfileがアクセス不可の場合があるので何度か繰り返す
+                            continue;
+                        }
+                        break;
                     }
                 }
 
@@ -174,7 +184,7 @@ namespace PlayService
                 _processId = null;
             }
 
-            EventLog.WriteEntry(String.Format("Exit"));
+            EventLog.WriteEntry("Exit");
 
             // バッチ呼び出しcmd.exeの終了
             if (!_parentProcessId.HasValue) {
