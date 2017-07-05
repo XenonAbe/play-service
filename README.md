@@ -1,4 +1,4 @@
-# play-service
+# PlayService
 Run Play Framework 2 application as a windows service.
 
 ## install
@@ -24,4 +24,6 @@ If ApplicationName is "fooapp" it will be "FOOAPP_HOME","FOOAPP_OPTS"
 
 Run the following command with administrator. 
 
+```
 PlayService.exe /u /ServiceName=YourPlayServiceName
+```
