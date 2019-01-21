@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.ServiceProcess;
+using System.Text;
 using System.Threading;
 
 namespace PlayService
@@ -13,9 +14,12 @@ namespace PlayService
     {
         private const int StartTimeout = 60000;
 
+        private const string ErrorFileName = "PlayServiceError";
+
+        private readonly Encoding _outputEncoding = new UTF8Encoding(false);
+
         private int? _processId;
-        private int? _parentProcessId;
-        private ManualResetEvent _waitFileHandle;
+        private Process _parentProcess;
 
         internal enum ControlEvent
         {
@@ -24,11 +28,6 @@ namespace PlayService
         }
 
         private const string Kernel32 = "kernel32.dll";
-
-        internal static class NativeMethods
-        {
-            public delegate int ConHndlr(int signalType);
-        }
 
         [SuppressUnmanagedCodeSecurity]
         internal static class UnsafeNativeMethods
@@ -56,7 +55,7 @@ namespace PlayService
         protected override void OnStart(string[] args)
         {
             if (File.Exists(pidfilePath)) {
-                throw new ApplicationException(String.Format("This application is already running (Or delete {0} file)", pidfilePath));
+                throw new ApplicationException($"This application is already running (Or delete {pidfilePath} file)");
             }
 
             RequestAdditionalTime(StartTimeout);
@@ -67,15 +66,17 @@ namespace PlayService
                 FileName = startBatch,
                 CreateNoWindow = true,
                 UseShellExecute = false,
-                WorkingDirectory = Program.Param.AppHome
+                WorkingDirectory = Program.Param.AppHome,
+                RedirectStandardError = true,
+                StandardErrorEncoding = _outputEncoding
             };
             if (!File.Exists(startBatch))
-                throw new ApplicationException(String.Format("not found {0}", startBatch));
+                throw new ApplicationException($"not found {startBatch}");
 
             if (Program.Param.Env != null) {
-                var envs = Program.Param.Env.Split(new[] {','});
+                var envs = Program.Param.Env.Split(new[] { ',' });
                 foreach (var env in envs) {
-                    var keyValue = env.Split(new[] {'='}, 2);
+                    var keyValue = env.Split(new[] { '=' }, 2);
                     if (psi.EnvironmentVariables.ContainsKey(keyValue[0])) {
                         psi.EnvironmentVariables.Remove(keyValue[0]);
                     }
@@ -84,41 +85,56 @@ namespace PlayService
                 }
             }
 
-            using (_waitFileHandle = new ManualResetEvent(false)) {
-                var watcher = new FileSystemWatcher();
-                watcher.Path = Path.GetDirectoryName(pidfilePath) + @"\";
-                watcher.Filter = Path.GetFileName(pidfilePath);
-                watcher.NotifyFilter = NotifyFilters.LastWrite;
-                watcher.Changed += OnPidfileChanged;
-                watcher.EnableRaisingEvents = true;
+            _processId = null;
+            using (var pidFileWaitHandle = new ManualResetEvent(false))
+            using (var pidFileWatcher = new FileSystemWatcher()) {
+                pidFileWatcher.Path = Path.GetDirectoryName(pidfilePath) + @"\";
+                pidFileWatcher.Filter = Path.GetFileName(pidfilePath);
+                pidFileWatcher.NotifyFilter = NotifyFilters.LastWrite;
+                pidFileWatcher.Changed += delegate
+                {
+                    // ReSharper disable once AccessToDisposedClosure
+                    pidFileWaitHandle.Set();
+                };
+                pidFileWatcher.EnableRaisingEvents = true;
 
-                using (var process = Process.Start(psi)) {
-                    Debug.Assert(process != null, "process != null");
+                _parentProcess?.Dispose();
+                _parentProcess = Process.Start(psi);
+                try {
+                    Debug.Assert(_parentProcess != null, nameof(_parentProcess) + " != null");
+                    _parentProcess.ErrorDataReceived += delegate(object o, DataReceivedEventArgs eventArgs)
+                    {
+                        if (_processId.HasValue)
+                            using (var sw = new StreamWriter(GetErrorFilename(_processId.Value), true)) {
+                                sw.Write(eventArgs.Data);
+                            }
+                        else
+                            EventLog.WriteEntry(eventArgs.Data, EventLogEntryType.Error);
+                    };
+                    _parentProcess.BeginErrorReadLine();
+
                     var waitProcessHandle = new ManualResetEvent(true)
                     {
-                        SafeWaitHandle = new SafeWaitHandle(process.Handle, false)
+                        SafeWaitHandle = new SafeWaitHandle(_parentProcess.Handle, false)
                     };
-                    var index = WaitHandle.WaitAny(new WaitHandle[] {_waitFileHandle, waitProcessHandle}, StartTimeout - 5000);
+                    var index = WaitHandle.WaitAny(new WaitHandle[] { pidFileWaitHandle, waitProcessHandle }, StartTimeout - 5000);
                     if (index == WaitHandle.WaitTimeout)
                         throw new ApplicationException("Timeout");
 
                     if (index == 1) {
-                        // cmd.exeの終了 → Application開始失敗
+                        // pidFileが生成される前にparentProcess(startBatch)が終了 → Application開始失敗
                         throw new ApplicationException("Application Start Failed");
                     }
 
                     if (!File.Exists(pidfilePath)) {
                         throw new ApplicationException("Pidfile is not created");
                     }
-                    watcher.EnableRaisingEvents = false;
 
-                    //Thread.Sleep(500);
+                    pidFileWatcher.EnableRaisingEvents = false;
 
-                    _parentProcessId = process.Id;
+                    Thread.Sleep(1);
 
                     for (int i = 0; i < 10; i++) {
-                        Thread.Sleep(100);
-
                         try {
                             using (var reader = new StreamReader(pidfilePath)) {
                                 var line = reader.ReadLine();
@@ -127,20 +143,39 @@ namespace PlayService
                             }
                         } catch (IOException) {
                             // タイミングによりpidfileがアクセス不可の場合があるので何度か繰り返す
+                            Thread.Sleep(100);
                             continue;
                         }
                         break;
                     }
+
+                    _parentProcess.Exited += OnParentProcessExited;
+                    _parentProcess.EnableRaisingEvents = true;
+
+                }
+                catch {
+                    _parentProcess?.Dispose();
+                    _parentProcess = null;
+                    throw;
                 }
 
-                EventLog.WriteEntry(String.Format("Play server process ID is {0}", _processId));
+                EventLog.WriteEntry($"Play server process ID is {_processId}");
             }
             ExitCode = 0;
         }
 
-        private void OnPidfileChanged(object sender, FileSystemEventArgs e)
+        private string GetErrorFilename(int processId)
         {
-            _waitFileHandle.Set();
+            return Path.Combine(Path.GetTempPath(), $@"{ErrorFileName}{processId}.txt");
+
+        }
+
+        private void OnParentProcessExited(object sender, EventArgs e)
+        {
+            EventLog.WriteEntry($"Play server is aborted. see {GetErrorFilename(_processId.GetValueOrDefault(0))}", EventLogEntryType.Error);
+            _parentProcess?.Dispose();
+            _parentProcess = null;
+            Stop();
         }
 
         protected override void OnStop()
@@ -150,58 +185,64 @@ namespace PlayService
                 return;
             }
 
-            // Play (java.exe)の終了
             try {
-                using (var process = Process.GetProcessById(_processId.Value)) {
-                    if (process.HasExited) {
-                        ExitCode = 3;
+                try {
+                    // Play (java.exe)の終了
+                    using (var process = Process.GetProcessById(_processId.Value)) {
+                        if (process.HasExited) {
+                            ExitCode = 3;
+                            return;
+                        }
+                        _parentProcess.EnableRaisingEvents = false;
+
+                        // Ctrl+C送信
+                        if (!UnsafeNativeMethods.AttachConsole(process.Id)) {
+                            throw new ApplicationException(String.Format("AttachConsole: {0}", Marshal.GetLastWin32Error()));
+                        }
+
+                        Console.CancelKeyPress += ConsoleOnCancelKeyPress;
+                        if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.SessionId)) {
+                            throw new ApplicationException(String.Format("GenerateConsoleCtrlEvent: {0}", Marshal.GetLastWin32Error()));
+                        }
+                        // Win8.1では↓でOKだがWin2008SVRでは↑でないとCtrl+Cが送られない
+                        //                    if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.Id)) {
+                        //                        throw new ApplicationException(String.Format("GenerateConsoleCtrlEvent: {0}", Marshal.GetLastWin32Error()));
+                        //                    }
+
+                        if (!UnsafeNativeMethods.FreeConsole()) {
+                            throw new ApplicationException(String.Format("FreeConsole: {0}", Marshal.GetLastWin32Error()));
+                        }
+                        process.WaitForExit();
+                    }
+                } catch (ArgumentException) {
+                    ExitCode = 2;
+                    return;
+                }
+
+                Thread.Sleep(1);
+
+                // バッチ呼び出しcmd.exeの終了
+                if (_parentProcess == null) {
+                    return;
+                }
+                try {
+                    if (_parentProcess.HasExited) {
                         return;
                     }
 
-                    // Ctrl+C送信
-                    if (!UnsafeNativeMethods.AttachConsole(process.Id)) {
-                        throw new ApplicationException(String.Format("AttachConsole: {0}", Marshal.GetLastWin32Error()));
-                    }
+                    _parentProcess.Kill();
 
-                    Console.CancelKeyPress += ConsoleOnCancelKeyPress;
-                    if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.SessionId)) {
-                        throw new ApplicationException(String.Format("GenerateConsoleCtrlEvent: {0}", Marshal.GetLastWin32Error()));
-                    }
-                    // Win8.1では↓でOKだがWin2008SVRでは↑でないとCtrl+Cが送られない
-//                    if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.Id)) {
-//                        throw new ApplicationException(String.Format("GenerateConsoleCtrlEvent: {0}", Marshal.GetLastWin32Error()));
-//                    }
-
-                    if (!UnsafeNativeMethods.FreeConsole()) {
-                        throw new ApplicationException(String.Format("FreeConsole: {0}", Marshal.GetLastWin32Error()));
-                    }
-                    process.WaitForExit();
+                    File.Delete(GetErrorFilename(_processId.Value));
                 }
-            } catch (ArgumentException) {
-                ExitCode = 2;
-                return;
+                catch (ArgumentException) {
+                    return;
+                } finally {
+                    _parentProcess.Dispose();
+                    _parentProcess = null;
+                }
+
             } finally {
                 _processId = null;
-            }
-
-            EventLog.WriteEntry("Exit");
-
-            // バッチ呼び出しcmd.exeの終了
-            if (!_parentProcessId.HasValue) {
-                return;
-            }
-            try {
-                using (var parentProcess = Process.GetProcessById(_parentProcessId.Value)) {
-                    if (parentProcess.HasExited) {
-                        return;
-                    }
-
-                    parentProcess.Kill();
-                }
-            } catch (ArgumentException) {
-                return;
-            } finally {
-                _parentProcessId = null;
             }
 
             ExitCode = 0;
