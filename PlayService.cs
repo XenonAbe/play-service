@@ -12,7 +12,7 @@ namespace PlayService
 {
     public partial class PlayService : ServiceBase
     {
-        private const int StartTimeout = 60000;
+        private const int StartTimeout = 60000 * 5;
 
         private const string ErrorFileName = "PlayServiceError";
 
