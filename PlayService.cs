@@ -176,7 +176,11 @@ namespace PlayService
 
         private void OnParentProcessExited(object sender, EventArgs e)
         {
-            EventLog.WriteEntry($"Play server is aborted. see {GetErrorFilename(_processId.GetValueOrDefault(0))}", EventLogEntryType.Error);
+            var errorFilename = GetErrorFilename(_processId.GetValueOrDefault(0));
+            if (File.Exists(errorFilename))
+                EventLog.WriteEntry($"Play server is aborted. see {errorFilename}", EventLogEntryType.Error);
+            else
+                EventLog.WriteEntry($"Play server is aborted.", EventLogEntryType.Error);
             _parentProcess?.Dispose();
             _parentProcess = null;
             Stop();
@@ -198,6 +202,7 @@ namespace PlayService
                             return;
                         }
                         _parentProcess.EnableRaisingEvents = false;
+                        _parentProcess.Exited -= OnParentProcessExited;
 
                         // Ctrl+C送信
                         if (!UnsafeNativeMethods.AttachConsole(process.Id)) {
@@ -237,8 +242,7 @@ namespace PlayService
                     _parentProcess.Kill();
 
                     File.Delete(GetErrorFilename(_processId.Value));
-                }
-                catch (ArgumentException) {
+                } catch (ArgumentException) {
                     return;
                 } finally {
                     _parentProcess.Dispose();
