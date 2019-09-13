@@ -1,0 +1,22 @@
+root=true
+
+[*.cs]
+
+indent_size=4
+indent_style=space
+tab_width=4
+
+end_of_line=crlf
+insert_final_newline=true
+
+indent_brace_style=K&R
+
+# Microsoft .NET properties
+csharp_indent_braces=false
+csharp_new_line_before_catch=false
+csharp_new_line_before_else=false
+csharp_new_line_before_finally=false
+csharp_new_line_before_open_brace=types,local_functions,methods,anonymous_methods,lambdas,indexers,events,properties,accessors,control_blocks,anonymous_types,object_collection_array_initalizers
+
+# ReSharper properties
+resharper_other_braces=end_of_line
