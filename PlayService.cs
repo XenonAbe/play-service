@@ -55,7 +55,11 @@ namespace PlayService
         protected override void OnStart(string[] args)
         {
             if (File.Exists(pidfilePath)) {
-                throw new ApplicationException($"This application is already running (Or delete {pidfilePath} file)");
+                if (IsValidPidFile(out int pid))
+                    throw new ApplicationException($"This application is already running (ProcessID={pid})");
+
+                EventLog.WriteEntry($"Delete last {Path.GetFileName(pidfilePath)}. {(pid >=0 ? $"(ProcessID={pid})" : "")}", EventLogEntryType.Warning);
+                File.Delete(pidfilePath);
             }
 
             RequestAdditionalTime(StartTimeout);
@@ -251,6 +255,27 @@ namespace PlayService
         private void ConsoleOnCancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             e.Cancel = true;
+        }
+
+        private bool IsValidPidFile(out int pid)
+        {
+            pid = -1;
+            using (var r = new StreamReader(pidfilePath, new UTF8Encoding(false))) {
+                var line = r.ReadLine()?.Trim();
+                if (string.IsNullOrEmpty(line))
+                    return false;
+                if (!int.TryParse(line, out pid))
+                    return false;
+                try {
+                    using (Process.GetProcessById(pid))
+                    {
+                    }
+                } catch (ArgumentException) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private string pidfilePath
