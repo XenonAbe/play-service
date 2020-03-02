@@ -115,7 +115,7 @@ namespace PlayService
             if (Param.Install) {
                 // パラメーターチェック
                 if (!Directory.Exists(Param.AppHome)) {
-                    throw new ApplicationException(String.Format("Directory not exists {0}", Param.AppHome));
+                    throw new ApplicationException($"Directory not exists {Param.AppHome}");
                 }
                 Param.AppHome = Path.GetFullPath(Param.AppHome);
             }
@@ -153,6 +153,7 @@ namespace PlayService
 
             // アセンブリ
             Assembly assembly = Assembly.GetEntryAssembly();
+            Debug.Assert(assembly != null, nameof(assembly) + " != null");
             installutilArgs.Add(assembly.Location.QuoteAsNeeded());
 
             var installutilArg = String.Join(" ", installutilArgs);
@@ -172,8 +173,7 @@ namespace PlayService
 
         private static void Application_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            var ex = e.ExceptionObject as Exception;
-            if (ex != null) {
+            if (e.ExceptionObject is Exception ex) {
                 Console.Error.WriteLine(ex.Message);
                 //Console.Error.WriteLine("???");
                 Environment.Exit(1);
@@ -186,7 +186,7 @@ namespace PlayService
 
             var extra = OptionSet.Parse(args);
             if (extra.Count > 0)
-                throw new ApplicationException(String.Format("Invalid Argument: {0}", extra[0]));
+                throw new ApplicationException($"Invalid Argument: {extra[0]}");
         }
 
         static void Usage()

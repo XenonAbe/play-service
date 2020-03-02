@@ -78,7 +78,7 @@ namespace PlayService
                 throw new ApplicationException($"not found {startBatch}");
 
             if (Program.Param.Env != null) {
-                var envs = Program.Param.Env.Split(new[] { ',' });
+                var envs = Program.Param.Env.Split(',');
                 foreach (var env in envs) {
                     var keyValue = env.Split(new[] { '=' }, 2);
                     if (psi.EnvironmentVariables.ContainsKey(keyValue[0])) {
@@ -177,10 +177,10 @@ namespace PlayService
         private void OnParentProcessExited(object sender, EventArgs e)
         {
             var errorFilename = GetErrorFilename(_processId.GetValueOrDefault(0));
-            if (File.Exists(errorFilename))
-                EventLog.WriteEntry($"Play server is aborted. see {errorFilename}", EventLogEntryType.Error);
-            else
-                EventLog.WriteEntry($"Play server is aborted.", EventLogEntryType.Error);
+            EventLog.WriteEntry(
+                File.Exists(errorFilename)
+                    ? $"Play server is aborted. see {errorFilename}"
+                    : "Play server is aborted.", EventLogEntryType.Error);
             _parentProcess?.Dispose();
             _parentProcess = null;
             Stop();
@@ -206,12 +206,12 @@ namespace PlayService
 
                         // Ctrl+C送信
                         if (!UnsafeNativeMethods.AttachConsole(process.Id)) {
-                            throw new ApplicationException(String.Format("AttachConsole: {0}", Marshal.GetLastWin32Error()));
+                            throw new ApplicationException($"AttachConsole: {Marshal.GetLastWin32Error()}");
                         }
 
                         Console.CancelKeyPress += ConsoleOnCancelKeyPress;
                         if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.SessionId)) {
-                            throw new ApplicationException(String.Format("GenerateConsoleCtrlEvent: {0}", Marshal.GetLastWin32Error()));
+                            throw new ApplicationException($"GenerateConsoleCtrlEvent: {Marshal.GetLastWin32Error()}");
                         }
                         // Win8.1では↓でOKだがWin2008SVRでは↑でないとCtrl+Cが送られない
                         //                    if (!UnsafeNativeMethods.GenerateConsoleCtrlEvent(ControlEvent.CtrlC, (uint)process.Id)) {
@@ -219,7 +219,7 @@ namespace PlayService
                         //                    }
 
                         if (!UnsafeNativeMethods.FreeConsole()) {
-                            throw new ApplicationException(String.Format("FreeConsole: {0}", Marshal.GetLastWin32Error()));
+                            throw new ApplicationException($"FreeConsole: {Marshal.GetLastWin32Error()}");
                         }
                         process.WaitForExit();
                     }
@@ -282,12 +282,6 @@ namespace PlayService
             return true;
         }
 
-        private string pidfilePath
-        {
-            get
-            {
-                return Path.Combine(Program.Param.AppHome, @"RUNNING_PID");
-            }
-        }
+        private string pidfilePath => Path.Combine(Program.Param.AppHome, @"RUNNING_PID");
     }
 }
