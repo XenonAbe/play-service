@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -87,13 +88,15 @@ namespace PlayService
 
                 var appHome = FindAppHome(config);
                 if (appHome == null)
-                    throw new ApplicationException($"not found application");
+                    throw new ApplicationException("not found application");
 
                 _startupInfo.Add($@"APP_HOME is {appHome}");
 
                 var launcher = GetLauncher(config, appHome);
                 if (!File.Exists(launcher))
                     throw new ApplicationException($"not found {launcher}");
+
+                var outputEncoding = GetOutputEncoding(config);
                 var psi = new ProcessStartInfo
                 {
                     FileName = launcher,
@@ -101,36 +104,35 @@ namespace PlayService
                     UseShellExecute = false,
                     WorkingDirectory = appHome,
                     RedirectStandardError = true,
-                    StandardErrorEncoding = GetOutputEncoding(config)
+                    StandardErrorEncoding = outputEncoding
                 };
 
                 var envs = GetEnv(config);
-                if (envs != null) {
-                    foreach (var env in envs) {
-                        var keyValue = env.Split(new[] {'='}, 2);
-                        if (psi.EnvironmentVariables.ContainsKey(keyValue[0])) {
-                            psi.EnvironmentVariables.Remove(keyValue[0]);
-                        }
-
-                        var value = keyValue.Length > 1 ? keyValue[1] : "";
-                        psi.EnvironmentVariables.Add(keyValue[0], value);
-                    }
-                }
 
                 var optsKey = $"{GetAppName(config).ToUpper().Replace('-', '_')}_OPTS";
-                if (!psi.EnvironmentVariables.ContainsKey(optsKey)) {
+                if (!psi.EnvironmentVariables.ContainsKey(optsKey) && !envs.ContainsKey(optsKey)) {
                     var optionList = config.GetStringList("service.app.option");
-                    if (optionList != null && optionList.Count > 0) {
+                    if (optionList != null && optionList.Count > 0)
+                    {
                         var builder = new StringBuilder();
-                        foreach (var option in optionList) {
+                        foreach (var option in optionList)
+                        {
                             builder.Append(option);
                             builder.Append(' ');
                         }
 
                         builder.Length -= 1;
-                        psi.EnvironmentVariables.Add(optsKey, builder.ToString());
+                        envs.Add(optsKey, builder.ToString());
                     }
                 }
+
+                foreach (DictionaryEntry env in envs) {
+                    if (psi.EnvironmentVariables.ContainsKey((string)env.Key)) {
+                        psi.EnvironmentVariables.Remove((string)env.Key);
+                    }
+                    psi.EnvironmentVariables.Add((string)env.Key, (string)env.Value);
+                }
+
 #if DEBUG
                 File.AppendAllText(Program.DebugTextFile, $@"env:{'\n'}");
                 foreach (DictionaryEntry env in psi.EnvironmentVariables) {
@@ -139,6 +141,13 @@ namespace PlayService
 #endif
 
                 _processId = null;
+
+                if (config.GetBoolean("service.generateTrialLauncher")) {
+                    var filename = GenerateTrialLauncher(appHome, launcher, envs, outputEncoding);
+                    EventLog.WriteEntry($"Generate Trial Launcher.{'\n'}{filename}{'\n'}Don't Start Service.", EventLogEntryType.Warning);
+                    throw new ApplicationException("Generate Trial Launcher.");
+                }
+
                 pidfilePath = GetPidfilePath(config) ?? Path.Combine(appHome, PidfileName);
                 using (var pidFileWaitHandle = new ManualResetEvent(false))
                 using (var pidFileWatcher = new FileSystemWatcher()) {
@@ -333,10 +342,7 @@ namespace PlayService
         private Config LoadConfig()
         {
             var configFilename = Program.Param.ConfigFile ?? @"service.conf";
-            if (Program.Param.WorkDir != null)
-                configFilename = Utils.GetFullPath(Program.Param.WorkDir, configFilename);
-            else
-                configFilename = Utils.GetFullPath(Path.GetFullPath("."), configFilename);
+            configFilename = Utils.GetFullPath(Program.Param.WorkDir ?? Path.GetFullPath("."), configFilename);
 #if DEBUG
             File.AppendAllText(Program.DebugTextFile, $@"configFilename:{configFilename}{'\n'}");
 #endif
@@ -448,7 +454,7 @@ namespace PlayService
 
             var result = config.GetString("service.app.name");
             if (String.IsNullOrEmpty(result))
-                throw new ApplicationException($"app.name is not set");
+                throw new ApplicationException("app.name is not set");
             return result;
         }
 
@@ -463,14 +469,20 @@ namespace PlayService
         /// </summary>
         /// <param name="config"></param>
         /// <returns></returns>
-        private string[] GetEnv(Config config)
+        private StringDictionary GetEnv(Config config)
         {
-            if (Program.Param.Env != null)
-                return Program.Param.Env.Split(',');
+            var result = new StringDictionary();
+            if (Program.Param.Env != null) {
 
-            return config.GetObject("service.app.environment").Values
-                .Select(field => $"{field.Key}={field.Value.GetString()}")
-                .ToArray();
+                Program.Param.Env.Split(',')
+                    .Select(x => x.Split(new[] { '=' }, 2))
+                    .ToList().ForEach(keyValue => { result.Add(keyValue[0], keyValue.Length > 1 ? keyValue[1] : ""); });
+            } else {
+                config.GetObject("service.app.environment").Values
+                    .ToList().ForEach(field => { result.Add(field.Key, field.Value.GetString()); });
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -531,5 +543,24 @@ namespace PlayService
             return result;
         }
 
+        private string GenerateTrialLauncher(string appHome, string launcher, StringDictionary envs, Encoding outputEncoding)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(@"set local");
+            builder.AppendLine($@"chcp {outputEncoding.CodePage}");
+            builder.AppendLine($@"cd {appHome}");
+            builder.AppendLine(@"@echo.");
+            foreach (DictionaryEntry env in envs) {
+                builder.AppendLine($@"set {env.Key}={Utils.BatchEscape((string)env.Value)}");
+            }
+            builder.AppendLine(@"@echo.");
+            builder.AppendLine(@"set");
+            builder.AppendLine(@"@echo.");
+            builder.AppendLine($@"call {'"'}{launcher}{'"'}");
+            builder.AppendLine(@"@pause");
+            var result = Path.Combine(Program.Param.WorkDir ?? Program.Param.AppHome, "TrialLauncher.bat");
+            File.WriteAllText(result, builder.ToString());
+            return result;
+        }
     }
 }

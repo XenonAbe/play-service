@@ -11,5 +11,23 @@ namespace PlayService
                 basePath += Path.DirectorySeparatorChar;
             return (new Uri(new Uri(basePath), path)).LocalPath;
         }
+
+        /// <summary>
+        /// バッチファイル用のエスケープ
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static string BatchEscape(string value)
+        {
+            value = value.Replace("%", "%%");
+            value = value.Replace("^", "^^");
+            value = value.Replace("<", "^<");
+            value = value.Replace(">", "^>");
+            value = value.Replace("|", "^|");
+            value = value.Replace("(", "^(");
+            value = value.Replace(")", "^)");
+            value = value.Replace("&", "^&");
+            return value;
+        }
     }
 }
