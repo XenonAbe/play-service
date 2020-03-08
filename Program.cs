@@ -26,6 +26,9 @@ namespace PlayService
 
             public String ServiceName { get; set; }
 
+            public String WorkDir { get; set; }
+            public String ConfigFile { get; set; }
+
             public String AppName { get; set; }
             public String AppHome { get; set; }
             public String Env { get; set; }
@@ -50,6 +53,8 @@ namespace PlayService
 
           { "ServiceName=",  v => Param.ServiceName = v },
 
+          { "WorkDir=",  v => Param.WorkDir = v },
+          { "ConfigFile|ConfigurationFile=",  v => Param.ConfigFile = v },
           { "AppName|ApplicationName=",  v => Param.AppName = v },
           { "AppHome|ApplicationHome=",  v => Param.AppHome = v },
           { "Env|Environment|EnvironmentVariables=",  v => Param.Env = v },
@@ -62,12 +67,26 @@ namespace PlayService
           { "h|?|help",   v => Param.Help = v != null },
         };
 
+#if DEBUG
+        public static string DebugTextFile
+        {
+            get
+            {
+                var filename = "ServiceDebug.txt";
+                if (Param.WorkDir != null)
+                    return Path.Combine(Param.WorkDir, filename);
+                return filename;
+            }
+        }
+#endif
+
         /// <summary>
         /// アプリケーションのメイン エントリ ポイントです。
         /// </summary>
         private static void Main()
         {
-            try {
+            try
+            {
                 ParseArgs();
             } catch (ApplicationException ex) {
                 Console.Error.WriteLine(ex.Message);
@@ -75,17 +94,16 @@ namespace PlayService
                 return;
             }
 
+#if DEBUG
+            File.WriteAllText(Program.DebugTextFile, $@"");
+#endif
+
             if (Param.Help) {
                 Usage();
                 return;
             }
 
             if (Param.Install && Param.Uninstall) {
-                Usage();
-                return;
-            }
-
-            if (!Param.Uninstall && (String.IsNullOrEmpty(Param.AppName) || String.IsNullOrEmpty(Param.AppHome))) {
                 Usage();
                 return;
             }
@@ -101,6 +119,11 @@ namespace PlayService
                 return;
             }
 
+            if (Param.WorkDir != null && !Directory.Exists(Param.WorkDir))
+                throw new ApplicationException($"Directory not exists {Param.WorkDir}");
+            if (Param.AppHome != null && !Directory.Exists(Param.AppHome))
+                throw new ApplicationException($"Directory not exists {Param.AppHome}");
+
             FreeConsole();
 
             var servicesToRun = new ServiceBase[] 
@@ -114,10 +137,20 @@ namespace PlayService
         {
             if (Param.Install) {
                 // パラメーターチェック
-                if (!Directory.Exists(Param.AppHome)) {
-                    throw new ApplicationException($"Directory not exists {Param.AppHome}");
+                if (!string.IsNullOrEmpty(Param.WorkDir)) {
+                    if (!Directory.Exists(Param.WorkDir))
+                        throw new ApplicationException($"Directory not exists {Param.WorkDir}");
+                    Param.WorkDir = Path.GetFullPath(Param.WorkDir);
                 }
-                Param.AppHome = Path.GetFullPath(Param.AppHome);
+
+                if (!string.IsNullOrEmpty(Param.AppHome)) {
+                    if (!Directory.Exists(Param.AppHome))
+                        throw new ApplicationException($"Directory not exists {Param.AppHome}");
+                    Param.AppHome = Path.GetFullPath(Param.AppHome);
+                }
+
+                if (string.IsNullOrEmpty(Param.WorkDir) && string.IsNullOrEmpty(Param.AppHome))
+                    Param.WorkDir = Path.GetFullPath(@".\");
             }
 
             //installutil.exeのフルパスを取得
@@ -131,30 +164,35 @@ namespace PlayService
             if (Param.Uninstall)
                 installutilArgs.Add("/u");
             if (Param.LogFile != null)
-                installutilArgs.Add("/LogFile=" + Param.LogFile.QuoteAsNeeded());
+                installutilArgs.Add("/LogFile=" + Param.LogFile.QuoteIfNecessary());
             if (Param.LogToConsole != null)
-                installutilArgs.Add("/LogToConsole=" + Param.LogToConsole.QuoteAsNeeded());
+                installutilArgs.Add("/LogToConsole=" + Param.LogToConsole.QuoteIfNecessary());
             if (Param.ShowCallStack)
                 installutilArgs.Add("/ShowCallStack");
             if (Param.InstallStateDir != null)
-                installutilArgs.Add("/InstallStateDir=" + Param.InstallStateDir.QuoteAsNeeded());
+                installutilArgs.Add("/InstallStateDir=" + Param.InstallStateDir.QuoteIfNecessary());
 
             // サービスインストーラーのオプション
             if (Param.ServiceName != null)
-                installutilArgs.Add("/ServiceName=" + Param.ServiceName.QuoteAsNeeded());
+                installutilArgs.Add("/ServiceName=" + Param.ServiceName.QuoteIfNecessary());
 
             // アセンブリのオプション
-            if (Param.AppName != null)
-                installutilArgs.Add("/AppName=" + Param.AppName.QuoteAsNeeded());
+            if (Param.WorkDir != null)
+                installutilArgs.Add("/WorkDir=" + Param.WorkDir.QuoteIfNecessary());
+            if (Param.ConfigFile != null)
+                installutilArgs.Add("/ConfigFile=" + Param.ConfigFile.QuoteIfNecessary());
+
             if (Param.AppHome != null)
-                installutilArgs.Add("/AppHome=" + Param.AppHome.QuoteAsNeeded());
+                installutilArgs.Add("/AppHome=" + Param.AppHome.QuoteIfNecessary());
+            if (Param.AppName != null)
+                installutilArgs.Add("/AppName=" + Param.AppName.QuoteIfNecessary());
             if (Param.Env != null)
                 installutilArgs.Add("/Env=" + Param.Env.Quote());
 
             // アセンブリ
             Assembly assembly = Assembly.GetEntryAssembly();
             Debug.Assert(assembly != null, nameof(assembly) + " != null");
-            installutilArgs.Add(assembly.Location.QuoteAsNeeded());
+            installutilArgs.Add(assembly.Location.QuoteIfNecessary());
 
             var installutilArg = String.Join(" ", installutilArgs);
 

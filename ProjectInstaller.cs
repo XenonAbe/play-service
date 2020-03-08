@@ -29,16 +29,21 @@ namespace PlayService
             if (!String.IsNullOrEmpty(Context.Parameters["ServiceName"]))
                 serviceInstaller.ServiceName = Context.Parameters["ServiceName"];
 
-            var assemblyPath = Context.Parameters["assemblypath"];
+            var assemblyPath = Context.Parameters["assemblypath"].Quote();
             if (!String.IsNullOrEmpty(Context.Parameters["ServiceName"]))
-                assemblyPath += " /ServiceName=" + Context.Parameters["ServiceName"].QuoteAsNeeded();
-            if (!String.IsNullOrEmpty(Context.Parameters["AppName"]))
-                assemblyPath += " /AppName=" + Context.Parameters["AppName"].QuoteAsNeeded();
+                assemblyPath += " /ServiceName=" + Context.Parameters["ServiceName"].QuoteIfNecessary();
+            if (!String.IsNullOrEmpty(Context.Parameters["WorkDir"]))
+                assemblyPath += " /WorkDir=" + Context.Parameters["WorkDir"].QuoteIfNecessary();
+            if (!String.IsNullOrEmpty(Context.Parameters["ConfigFile"]))
+                assemblyPath += " /ConfigFile=" + Context.Parameters["ConfigFile"].QuoteIfNecessary();
             if (!String.IsNullOrEmpty(Context.Parameters["AppHome"]))
-                assemblyPath += " /AppHome=" + Context.Parameters["AppHome"].QuoteAsNeeded();
+                assemblyPath += " /AppHome=" + Context.Parameters["AppHome"].QuoteIfNecessary();
+            if (!String.IsNullOrEmpty(Context.Parameters["AppName"]))
+                assemblyPath += " /AppName=" + Context.Parameters["AppName"].QuoteIfNecessary();
             if (!String.IsNullOrEmpty(Context.Parameters["Env"]))
                 assemblyPath += " /Env=" + Context.Parameters["Env"].Quote();
             Context.Parameters["assemblypath"] = assemblyPath;
+            Console.WriteLine($"assemblyPath:{assemblyPath}");
         }
 
     }

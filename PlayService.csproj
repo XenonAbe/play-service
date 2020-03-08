@@ -43,6 +43,8 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Configuration.Install" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.ServiceProcess" />
   </ItemGroup>
   <ItemGroup>
@@ -63,10 +65,13 @@
       <DependentUpon>ProjectInstaller.cs</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utils.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include=".editorconfig" />
     <None Include="App.config" />
     <None Include="packages.config" />
+    <EmbeddedResource Include="reference.conf" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="PlayService.resx">

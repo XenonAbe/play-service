@@ -12,9 +12,9 @@ namespace PlayService.Extensions
             return Quote(str, DefaultQuote);
         }
 
-        public static String QuoteAsNeeded(this String str)
+        public static String QuoteIfNecessary(this String str)
         {
-            if (str.IndexOf(DefaultQuote) >= 0)
+            if (str.IndexOf(DefaultQuote) >= 0 || str.IndexOf(' ') >= 0)
                 return Quote(str, DefaultQuote);
             return str;
         }
