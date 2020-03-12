@@ -21,7 +21,7 @@ The directory where dist-zip-file and config-file are located.
 ```
 WorkDir
 ├── service.conf
-└── yourapp-1.0.0-SNAPSHOT.zip <- Output file for Play dist task
+└── your-app-1.0.0.zip <- Output file for Play dist task
 ```
 
 ##### service.conf
