@@ -1,5 +1,4 @@
 ﻿using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // アセンブリに関する一般情報は以下の属性セットをとおして制御されます。
@@ -7,11 +6,10 @@ using System.Runtime.InteropServices;
 // これらの属性値を変更します。
 [assembly: AssemblyTitle("PlayService")]
 [assembly: AssemblyDescription("Run Play Framework 2 application as a windows service.")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Sakura Works")]
 [assembly: AssemblyProduct("PlayService")]
-[assembly: AssemblyCopyright("Copyright ©  2014-2020")]
-[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCopyright("Copyright 2014-2020 XenonAbe")]
+[assembly: AssemblyTrademark("Apache License, Version 2.0")]
 [assembly: AssemblyCulture("")]
 
 // ComVisible を false に設定すると、このアセンブリ内の型は COM コンポーネントから
@@ -32,5 +30,10 @@ using System.Runtime.InteropServices;
 // すべての値を指定するか、次を使用してビルド番号とリビジョン番号を既定に設定できます
 // 既定値にすることができます:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyFileVersion("2.1.0.0")]
+#if Debug
+[assembly: AssemblyConfiguration("net-4.0; debug")]
+#else
+[assembly: AssemblyConfiguration("net-4.0; release")]
+#endif
