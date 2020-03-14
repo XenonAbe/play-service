@@ -407,32 +407,32 @@ namespace PlayService
             if (distFile == null)
                 return;
 
-            var stageDir = GetStageDir();
+            var targetDir = GetTargetDir();
 
-            if (Directory.Exists(stageDir)) {
-                var stageWriteTime = Directory.GetLastWriteTime(stageDir);
+            if (Directory.Exists(targetDir)) {
+                var targetWriteTime = Directory.GetLastWriteTime(targetDir);
                 var distWriteTime = File.GetLastWriteTime(distFile);
 #if DEBUG
-                File.AppendAllText(Program.DebugTextFile, $@"stageWriteTime:{stageWriteTime}{'\n'}");
+                File.AppendAllText(Program.DebugTextFile, $@"targetWriteTime:{targetWriteTime}{'\n'}");
                 File.AppendAllText(Program.DebugTextFile, $@"distWriteTime:{distWriteTime}{'\n'}");
-                File.AppendAllText(Program.DebugTextFile, $@"{stageWriteTime > distWriteTime}{'\n'}");
+                File.AppendAllText(Program.DebugTextFile, $@"{targetWriteTime > distWriteTime}{'\n'}");
 #endif
-                if (stageWriteTime > distWriteTime)
+                if (targetWriteTime > distWriteTime)
                     return;
 
-                var prevStageDir = stageDir + "Prev";
-                if (Directory.Exists(prevStageDir)) {
-                    Directory.Delete(prevStageDir, true);
+                var prevTargetDir = targetDir + "Prev";
+                if (Directory.Exists(prevTargetDir)) {
+                    Directory.Delete(prevTargetDir, true);
                 }
 
 #if DEBUG
-                File.AppendAllText(Program.DebugTextFile, $@"Move{stageDir} to {prevStageDir}{'\n'}");
+                File.AppendAllText(Program.DebugTextFile, $@"Move{targetDir} to {prevTargetDir}{'\n'}");
 #endif
-                Directory.Move(stageDir, prevStageDir);
+                Directory.Move(targetDir, prevTargetDir);
             }
 
             _startupInfo.Add($@"Extract {Path.GetFileName(distFile)}");
-            ZipFile.ExtractToDirectory(distFile, stageDir);
+            ZipFile.ExtractToDirectory(distFile, targetDir);
         }
 
         private string FindNewestDistFile(Config config)
@@ -498,6 +498,18 @@ namespace PlayService
         }
 
         /// <summary>
+        /// targetディレクトリの場所
+        /// workDirディレクトリ内のtargetディレクトリ
+        /// </summary>
+        /// <returns></returns>
+        private string GetTargetDir()
+        {
+            if (Program.Param.WorkDir != null)
+                return Path.Combine(Program.Param.WorkDir, "target");
+            return null;
+        }
+
+        /// <summary>
         /// APP_HOME
         /// launcher script 内の APP_HOME と同じ意味 
         /// </summary>
@@ -509,17 +521,17 @@ namespace PlayService
                 return Program.Param.AppHome;
 
             var stageDir = GetStageDir();
-
-            if (!Directory.Exists(stageDir)) {
-                return null;
+            if (Directory.Exists(stageDir)) {
+                if (Directory.Exists(Path.Combine(stageDir, "bin")))
+                    return stageDir;
             }
 
-            if (Directory.Exists(Path.Combine(stageDir, "bin")))
-                return stageDir;
-
-            var dirList = Directory.EnumerateDirectories(stageDir, $"{GetAppName(config)}-*").ToList();
-            if (dirList.Count == 1) {
-                return dirList[0];
+            var targetDir = GetTargetDir();
+            if (Directory.Exists(targetDir)) {
+                var dirList = Directory.EnumerateDirectories(targetDir, $"{GetAppName(config)}-*").ToList();
+                if (dirList.Count == 1) {
+                    return dirList[0];
+                }
             }
             return null;
         }
