@@ -361,9 +361,21 @@ namespace PlayService
             {
                 Environment.SetEnvironmentVariable("AppHome", Program.Param.AppHome);
             }
+
             var config =
                 (configFilename != null ? HoconConfigurationFactory.FromFile(configFilename) : Config.Empty)
                 .WithFallback(HoconConfigurationFactory.FromResource("PlayService.reference.conf", Assembly.GetExecutingAssembly()));
+
+            if (Program.Param.WorkDir != null)
+            {
+                Environment.SetEnvironmentVariable("WorkDir", null);
+                Environment.SetEnvironmentVariable("WorkDirName", null);
+                Environment.SetEnvironmentVariable("WorkDirNameUri", null);
+            }
+            if (Program.Param.AppHome != null)
+            {
+                Environment.SetEnvironmentVariable("AppHome", null);
+            }
             return config;
         }
 
