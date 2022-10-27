@@ -126,7 +126,7 @@ namespace PlayService
                     }
                 }
 
-                foreach (DictionaryEntry env in envs) {
+                foreach (var env in envs) {
                     if (psi.EnvironmentVariables.ContainsKey((string)env.Key)) {
                         psi.EnvironmentVariables.Remove((string)env.Key);
                     }
@@ -481,9 +481,9 @@ namespace PlayService
         /// </summary>
         /// <param name="config"></param>
         /// <returns></returns>
-        private StringDictionary GetEnv(Config config)
+        private Dictionary<string,string> GetEnv(Config config)
         {
-            var result = new StringDictionary();
+            var result = new Dictionary<string,string>();
             if (Program.Param.Env != null) {
 
                 Program.Param.Env.Split(',')
@@ -567,14 +567,14 @@ namespace PlayService
             return result;
         }
 
-        private string GenerateTrialLauncher(string appHome, string launcher, StringDictionary envs, Encoding outputEncoding)
+        private string GenerateTrialLauncher(string appHome, string launcher, Dictionary<string,string> envs, Encoding outputEncoding)
         {
             var builder = new StringBuilder();
             builder.AppendLine(@"set local");
             builder.AppendLine($@"chcp {outputEncoding.CodePage}");
             builder.AppendLine($@"cd {appHome}");
             builder.AppendLine(@"@echo.");
-            foreach (DictionaryEntry env in envs) {
+            foreach (var env in envs) {
                 builder.AppendLine($@"set {env.Key}={Utils.BatchEscape((string)env.Value)}");
             }
             builder.AppendLine(@"@echo.");
